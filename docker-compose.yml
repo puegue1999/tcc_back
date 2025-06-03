@@ -1,0 +1,84 @@
+version: '3.5'
+services:
+    php-fpm:
+        container_name: php
+        build:
+            context: ./.DOCKER_FILES/php-fpm
+        volumes:
+            - ./:/code
+            - ./.DOCKER_FILES/php-fpm/xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+        networks:
+            - plataforma-network
+        depends_on:
+            - mariadb
+        environment:
+            XDEBUG_CONFIG: remote_host=host.docker.internal
+            PHP_IDE_CONFIG: "serverName=xdebug-docker"
+
+
+    nginx-server:
+        container_name: nginx
+        image: nginx:latest
+        ports:
+            - "8080:80"
+        volumes:
+            - ./:/code
+            - ./.DOCKER_FILES/nginx/conf/nginx.conf:/etc/nginx/conf.d/default.conf
+            - ./.DOCKER_FILES/logs/nginx:/var/log/nginx
+        depends_on:
+            - php
+        networks:
+            - plataforma-network
+
+    mariadb:
+        image: mariadb:latest
+        container_name: mariadb
+        volumes:
+            - .DOCKER_FILES/mariadb/data:/var/lib/mysql
+        ports:
+            - "3305:3306"
+        environment:
+            - MYSQL_USER=root
+            - MYSQL_PASSWORD=root
+            - MYSQL_ROOT_PASSWORD=root
+            - MYSQL_DATABASE=tcc_database
+        networks:
+            - plataforma-network
+
+    phpmyadmin:
+        container_name: phpmyadmin
+        image: phpmyadmin/phpmyadmin
+        environment:
+            - PMA_HOST=mariadb
+            - PMA_PORT=3306
+            - UPLOAD_LIMIT=4000000000
+            - PMA_ARBITRARY=1
+        ports:
+            - "82:80"
+        depends_on:
+            - mariadb
+        networks:
+            - plataforma-network
+
+    redis:
+        container_name: redis
+        image: redis:latest
+        networks:
+            - plataforma-network
+            
+    supervisor:
+        container_name: supervisor
+        build:
+            context: .DOCKER_FILES/supervisor
+        volumes:
+            - ./:/code
+        depends_on:
+            - php-fpm
+        networks:
+            - plataforma-network
+
+
+networks:
+    plataforma-network:
+        ipam:
+            driver: default
