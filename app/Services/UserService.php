@@ -32,6 +32,6 @@ class UserService
 
     public function getUserByKeys($request)
     {
-        return User::where('email', $request['email'])->orWhere('external_id', $request['external_id'])->withTrashed()->first();
+        return User::where('email', $request['email'])->where('password', $request['password'])->first();
     }
 }

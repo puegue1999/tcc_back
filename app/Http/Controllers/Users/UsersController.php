@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Services\UserService;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UsersController extends Controller
 {
@@ -18,6 +20,7 @@ class UsersController extends Controller
     {
         $data = $request->all();
         $data['email'] = strtolower($data['email']);
+        $data['password'] = Hash::make($data['password']);
         $user = new User();
         $user->fill($data);
 
@@ -25,7 +28,7 @@ class UsersController extends Controller
         $userService->generateExtId($user);
         $user->last_activity = null;
         $user->terms_agreement_date = null;
-        
+
         $user->save();
     }
 
@@ -35,7 +38,25 @@ class UsersController extends Controller
         $userService = new UserService();
         $user = new User();
         $user = $userService->getUserByKeys($data);
-        dd($user);
+        $token = $this->generateJwtToken($user);
+        return response()->json(['token' => $token], 200);
+    }
+
+    /**
+     * Generate a JWT Token with custom claims to Login, impersonificate and depersonificate
+     *
+     * @param array $payload
+     * @return string $token
+     */
+    public static function generateJwtToken($user = null)
+    {
+        $payload = [
+            'name'               => $user->name,
+            'email'              => $user->email,
+            'external_id'        => $user->external_id,
+        ];
+
+        return JWTAuth::claims($payload)->fromUser($user);
     }
 
     /**
