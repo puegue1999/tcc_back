@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Route;
 // Route::get('/login', '\App\Http\Controllers\Users\UsersController@store')->name('login');
 
 // Route::middleware(
-//     'auth:sanctum'
+//     'auth:api'
 // )->group(function () {
 // });
 Route::group([
