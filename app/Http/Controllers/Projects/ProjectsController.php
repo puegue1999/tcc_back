@@ -22,7 +22,7 @@ class ProjectsController extends Controller
         $projectService = new ProjectService();
         $projectService->generateExtId($project);
         $project->status = 'QUEUE';
-        $project->qobject = $payload;
+        $project->qobject = json_encode($payload);
 
         $project->save();
 
