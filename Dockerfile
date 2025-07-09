@@ -90,3 +90,5 @@ RUN chown -R application:application .
 
 # The default apache run command
 # CMD ["apache2-foreground"]
+
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
