@@ -31,5 +31,22 @@ Route::group([
     Route::post('/createUser', '\App\Http\Controllers\Users\UsersController@create');
 });
 
+Route::group([
+    'prefix' => 'teste',
+], function ($router) {
+    Route::post('/iniciar', '\App\Http\Controllers\Jobs\JobsController@iniciar');
+    Route::get('/liberar', '\App\Http\Controllers\Jobs\JobsController@liberar');
+    Route::get('/parar', '\App\Http\Controllers\Jobs\JobsController@parar');
+});
+
+Route::middleware(
+    'auth:api'
+)->group(function () {
+    Route::group([
+        'prefix' => 'project',
+    ], function ($router) {
+        Route::post('create', '\App\Http\Controllers\Projects\ProjectsController@create');
+    });
+});
 
 //Route::get('/users', action: [UsersController::class, 'index']);
