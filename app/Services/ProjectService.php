@@ -27,6 +27,6 @@ class ProjectService
 
     public function getProject($request)
     {
-        return Project::where('external_id', $request['external_id'])->first();
+        return Project::where('external_id', $request)->first();
     }
 }

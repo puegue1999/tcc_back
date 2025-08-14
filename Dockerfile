@@ -2,6 +2,9 @@ FROM webdevops/php-nginx:8.1
 
 RUN curl -O https://nginx.org/keys/nginx_signing.key && apt-key add ./nginx_signing.key
 
+ENV VIRTUAL_ENV="/opt/venv"
+ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
+
 # Install packages
 RUN apt-get update && apt-get install -y \
     git \
@@ -45,9 +48,16 @@ RUN set -eux; \
     unzip \
     libzip-dev \
     zip \
+    python3 \
+    python3-venv \
+    python3-dev \
     libonig-dev; \
     rm -rf /var/lib/apt/lists/*
 
+# Criar venv e instalar qiskit dentro dele
+RUN python3 -m venv $VIRTUAL_ENV \
+    && pip install --upgrade pip setuptools wheel \
+    && pip install qiskit qiskit-aer
 
 RUN set -eux; \
     docker-php-ext-install pdo_mysql;

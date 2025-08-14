@@ -1,5 +1,8 @@
 FROM php:8.1-fpm
 
+ENV VIRTUAL_ENV="/opt/venv"
+ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
+
 RUN set -eux; \
     apt-get update; \
     apt-get upgrade -y; \
@@ -19,9 +22,16 @@ RUN set -eux; \
     unzip \
     libzip-dev \
     zip \
+    python3 \
+    python3-venv \
+    python3-dev \
     libonig-dev; \
     rm -rf /var/lib/apt/lists/*
 
+# Criar venv e instalar qiskit dentro dele
+RUN python3 -m venv $VIRTUAL_ENV \
+    && pip install --upgrade pip setuptools wheel \
+    && pip install qiskit qiskit-aer
 
 RUN set -eux; \
     docker-php-ext-install pdo_mysql sockets;

@@ -14,7 +14,7 @@ services:
         environment:
             XDEBUG_CONFIG: remote_host=host.docker.internal
             PHP_IDE_CONFIG: "serverName=xdebug-docker"
-
+        command: sh -c "php artisan cache:init && php-fpm"
 
     nginx-server:
         container_name: nginx

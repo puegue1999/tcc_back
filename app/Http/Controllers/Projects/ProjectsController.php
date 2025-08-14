@@ -7,6 +7,10 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\ProjectService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Symfony\Component\Process\Process;
+use App\Jobs\EsperaLiberacao;
+use Illuminate\Support\Facades\Log;
 
 class ProjectsController extends Controller
 {
@@ -29,14 +33,109 @@ class ProjectsController extends Controller
         $user = auth('api')->user();
         $user->projects()->attach($project->id);
 
-        $queue_projects = Cache::get('queue_projects', []);
-        $queue_projects[] = $project;
+        $queue_projects = Cache::get('queue_projects', [
+            'admin' => [],
+            'professor' => [],
+            'aluno' => [],
+            'running' => []
+        ]);
+        $queue_projects['aluno'][] = $project;
         Cache::put('queue_projects', $queue_projects);
+
+        if (empty($queue_projects['running'])) {
+            EsperaLiberacao::dispatch();
+        }
 
         return response()->json([
             'message' => 'QObject enfileirado com sucesso',
             'id' => $project->external_id,
-            'fila' => array_column($queue_projects, 'external_id'),
+            'fila' => $queue_projects
+        ], 200);
+    }
+
+    public function runQuantumCircuit(Request $request)
+    {
+        $queue_projects = Cache::get('queue_projects', []);
+
+        return response()->json($queue_projects);
+
+        $qobj = $request->json()->all();
+
+        $python = '/opt/qvenv/bin/python';
+        $script = base_path('app/Http/Controllers/Projects/runner.py');
+
+        $process = new Process([$python, $script], dirname($script));
+        $process->setInput(json_encode($qobj));
+        $process->setWorkingDirectory(dirname($script));
+        $process->run();
+
+        return response()->json(json_decode($process->getOutput()));
+    }
+
+    public function acessQiskit(Request $request)
+    {
+        $qobj = $request->json()->all();
+        $response = Http::asForm()->post('https://iam.cloud.ibm.com/identity/token', [
+            'grant_type' => 'urn:ibm:params:oauth:grant-type:apikey',
+            'apikey' => 'oc4r-v-nkaPw_fZcOIJ0d54FAIozYT22wDia1wvroSKC',
+        ]);
+
+        $token = $response->json()['access_token'];
+
+        $crn = 'crn:v1:bluemix:public:quantum-computing:us-east:a/70eaf13e2ab64dcda72db561d81fde72:a49cc80a-0826-41dd-a4df-17bb39e802cc::';
+
+        $backendList = Http::withHeaders([
+            'Authorization' => "Bearer {$token}",
+            'Service-CRN' => $crn,
+            'Accept' => 'application/json',
+            'IBM-API-Version' => '2025-05-01',
+        ])->get('https://quantum.cloud.ibm.com/api/v1/backends')->json();
+
+
+        $jobResp = Http::withHeaders([
+            'Authorization' => "Bearer {$token}",
+            'Service-CRN' => $crn,
+            'accept' => 'application/json',
+            'Content-Type' => 'application/json'
+        ])->post('https://quantum.cloud.ibm.com/api/v1/jobs', [
+                    'program_id' => 'estimator',
+                    'backend' => 'ibm_torino',
+                    'params' => [
+                        'pubs' => [
+                            [
+                                json_encode($qobj)
+                            ]
+                        ],
+                        'options' => ['dynamical_decoupling' => ['enable' => True]],
+                        'version' => 2,
+                        'resilience_level' => 1
+                    ]
+                ])->throw();
+
+        $jobId = $jobResp->json('id');
+
+        do {
+            sleep(5);
+            $status = Http::withHeaders([
+                'Authorization' => "Bearer {$token}",
+                'Service-CRN' => $crn,
+                'Accept' => 'application/json',
+            ])->get("https://quantum.cloud.ibm.com/api/v1/jobs/{$jobId}")
+                ->throw()
+                ->json();
+            dd($status);
+        } while (empty($status['status']));
+
+        $result = Http::withHeaders([
+            'Authorization' => "Bearer {$token}",
+            'Service-CRN' => $crn,
+            'Accept' => 'application/json',
+        ])->get("https://quantum.cloud.ibm.com/api/v1/jobs/{$jobId}/results")
+            ->throw()
+            ->json();
+
+        return response()->json([
+            'message' => $result,
         ], 200);
     }
 }

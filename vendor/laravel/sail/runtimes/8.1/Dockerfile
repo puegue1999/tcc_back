@@ -1,5 +1,8 @@
 FROM ubuntu:24.04
 
+ENV VIRTUAL_ENV="/opt/venv"
+ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
+
 LABEL maintainer="Taylor Otwell"
 
 ARG WWWGROUP
@@ -52,6 +55,10 @@ RUN apt-get update && apt-get upgrade -y \
     && apt-get -y autoremove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+RUN python3 -m venv $VIRTUAL_ENV \
+    && pip install --upgrade pip setuptools wheel \
+    && pip install qiskit qiskit-aer
 
 RUN setcap "cap_net_bind_service=+ep" /usr/bin/php8.1
 
