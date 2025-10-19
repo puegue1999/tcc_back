@@ -1,7 +1,6 @@
 version: '3.5'
 services:
     php-fpm:
-        container_name: php
         build:
             context: ./.DOCKER_FILES/php-fpm
         volumes:
@@ -26,7 +25,7 @@ services:
             - ./.DOCKER_FILES/nginx/conf/nginx.conf:/etc/nginx/conf.d/default.conf
             - ./.DOCKER_FILES/logs/nginx:/var/log/nginx
         depends_on:
-            - php
+            - php-fpm
         networks:
             - plataforma-network
 
