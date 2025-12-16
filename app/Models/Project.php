@@ -20,6 +20,12 @@ class Project extends Model
         'status' => 'QUEUE'
     ];
 
+    protected $hidden = [
+        'id',
+        'created_at',
+        'updated_at'
+    ];
+
     public function users()
     {
         return $this->belongsToMany(User::class, 'enrollments_user_project_relateds');

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use Illuminate\Bus\Queueable;
+use App\Support\QueueStructure;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -17,13 +18,23 @@ class EsperaLiberacao implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable;
 
-    // tempo do lock em segundos — ajuste conforme o tempo máximo esperado para processar
-    protected int $lockSeconds = 120;
     protected string $lockKey = 'queue_projects_lock';
+    protected int $lockSeconds = 30;
+
+    /**
+     * Ordem de prioridade das filas
+     */
+    protected array $priority = [
+        'Administrador',
+        'Professor',
+        'Aluno',
+        'Usuário',
+    ];
 
     public function handle(): void
     {
         while (true) {
+
             $lock = Cache::lock($this->lockKey, $this->lockSeconds);
 
             if (!$lock->get()) {
@@ -32,109 +43,101 @@ class EsperaLiberacao implements ShouldQueue
             }
 
             try {
-                $fila = Cache::get('queue_projects', [
-                    'Administrador' => [],
-                    'Professor' => [],
-                    'Aluno' => [],
-                    'running' => []
-                ]);
+                $fila = Cache::get('queue_projects', QueueStructure::empty());
 
-                $item = null;
-                $source = null;
+                $next = $this->pullNext($fila);
 
-                if (!empty($fila['Administrador'])) {
-                    $item = array_shift($fila['Administrador']);
-                    $source = 'Administrador';
-                } elseif (!empty($fila['Professor'])) {
-                    $item = array_shift($fila['Professor']);
-                    $source = 'Professor';
-                } elseif (!empty($fila['Aluno'])) {
-                    $item = array_shift($fila['Aluno']);
-                    $source = 'Aluno';
-                }
-
-                if ($item === null) { // nada pra processar
-                    // reindex e salva (opcional)
-                    $fila['Administrador'] = array_values($fila['Administrador']);
-                    $fila['Professor'] = array_values($fila['Professor']);
-                    $fila['Aluno'] = array_values($fila['Aluno']);
-                    $fila['running'] = array_values($fila['running']);
+                if ($next === null) {
                     Cache::put('queue_projects', $fila);
-
-                    $lock->release();
-                    break; // sai do while principal
+                    break;
                 }
 
-                // move item para running e salva (a operação é atômica enquanto temos o lock)
+                $item = $next['item'];
+                $source = $next['source'];
+
+                // move para running
                 $fila['running'][] = $item;
-                $fila['Administrador'] = array_values($fila['Administrador']);
-                $fila['Professor'] = array_values($fila['Professor']);
-                $fila['Aluno'] = array_values($fila['Aluno']);
-                $fila['running'] = array_values($fila['running']);
+
                 Cache::put('queue_projects', $fila);
 
-                Log::info("[EsperaLiberacao] pegou item {$this->getExternalId($item)} da fila {$source} e colocou em running.");
+                Log::info("[EsperaLiberacao] {$item['external_id']} saiu da fila {$source} → running");
 
             } finally {
-                if (isset($lock)) {
-                    try {
-                        $lock->release();
-                    } catch (\Throwable $e) {
-                    }
+                try {
+                    $lock->release();
+                } catch (\Throwable $e) {
                 }
             }
 
+            /**
+             * Processamento fora do lock
+             */
             try {
+                Project::where('external_id', $item['external_id'])
+                    ->update(['status' => 'QUEUE']);
+
                 $this->runQuantumCircuit($item);
 
-                Log::info("[EsperaLiberacao] processamento finalizado: {$this->getExternalId($item)}");
+                Project::where('external_id', $item['external_id'])
+                    ->update(['status' => 'FINISHED']);
+
+                Log::info("[EsperaLiberacao] processamento finalizado: {$item['external_id']}");
+
             } catch (\Throwable $e) {
-                Log::error("[EsperaLiberacao] Erro ao processar {$this->getExternalId($item)}: " . $e->getMessage());
+
+                Project::where('external_id', $item['external_id'])
+                    ->update(['status' => 'ERROR']);
+
+                Log::error(
+                    "[EsperaLiberacao] erro ao processar {$item['external_id']}: {$e->getMessage()}"
+                );
             }
 
+            /**
+             * Remove de running
+             */
             $lock = Cache::lock($this->lockKey, $this->lockSeconds);
+
             if ($lock->get()) {
                 try {
-                    $fila = Cache::get('queue_projects', [
-                        'Administrador' => [],
-                        'Professor' => [],
-                        'Aluno' => [],
-                        'running' => []
-                    ]);
+                    $fila = Cache::get('queue_projects', QueueStructure::empty());
 
-                    $ext = $this->getExternalId($item);
-                    foreach ($fila['running'] as $i => $r) {
-                        if ($this->getExternalId($r) === $ext) {
-                            unset($fila['running'][$i]);
-                            break;
-                        }
-                    }
-
-                    $fila['running'] = array_values($fila['running']);
-                    $fila['Administrador'] = array_values($fila['Administrador']);
-                    $fila['Professor'] = array_values($fila['Professor']);
-                    $fila['Aluno'] = array_values($fila['Aluno']);
+                    $fila['running'] = array_values(array_filter(
+                        $fila['running'],
+                        fn($r) => $r['external_id'] !== $item['external_id']
+                    ));
 
                     Cache::put('queue_projects', $fila);
 
-                    Log::info("[EsperaLiberacao] removido de running: {$ext}");
+                    Log::info("[EsperaLiberacao] removido de running: {$item['external_id']}");
+
                 } finally {
                     try {
                         $lock->release();
                     } catch (\Throwable $e) {
                     }
                 }
-            } else {
-                Log::warning("[EsperaLiberacao] não conseguiu lock para remover de running — item: " . $this->getExternalId($item));
             }
 
             sleep(1);
         }
     }
 
-    protected function getExternalId($project): ?string
+    /**
+     * Pega o próximo item respeitando prioridade
+     */
+    private function pullNext(array &$fila): ?array
     {
-        return $project->external_id ?? null;
+        foreach ($this->priority as $role) {
+            if (!empty($fila[$role])) {
+                return [
+                    'item' => array_shift($fila[$role]),
+                    'source' => $role,
+                ];
+            }
+        }
+
+        return null;
     }
 
     public function runQuantumCircuit($project)
@@ -142,24 +145,24 @@ class EsperaLiberacao implements ShouldQueue
         $python = '/opt/venv/bin/python';
         $script = base_path('app/Http/Controllers/Projects/runner.py');
 
+        $projectService = new ProjectService();
+        $request = $projectService->getProject($project['external_id']);
+
         $process = new Process([$python, $script], dirname($script));
-        $process->setInput($project->qobject);
+        $process->setInput($request->qobject);
         $process->setWorkingDirectory(dirname($script));
         $process->run();
 
-        $projectService = new ProjectService();
-        $projModel = $projectService->getProject($project->external_id);
-
-        if (!$process->isSuccessful() && $projModel) {
+        if (!$process->isSuccessful() && $request) {
             Log::error('[EsperaLiberacao] Process error: ' . $process->getErrorOutput());
-            $projModel->status = 'ERROR';
-            $projModel->qobject_result = $process->getErrorOutput();
-        } else if ($projModel) {
+            $request->status = 'ERROR';
+            $request->qobject_result = $process->getErrorOutput();
+        } else if ($request) {
             Log::info('[EsperaLiberacao] Process output: ' . $process->getOutput());
-            $projModel->status = 'FINISHED';
-            $projModel->qobject_result = $process->getOutput();
+            $request->status = 'FINISHED';
+            $request->qobject_result = $process->getOutput();
         }
 
-        $projModel->save();
+        $request->save();
     }
 }

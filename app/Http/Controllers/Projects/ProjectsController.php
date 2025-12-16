@@ -36,12 +36,14 @@ class ProjectsController extends Controller
 
         $activeRole = $user->activeRole();
 
-        $queue_projects[$activeRole->name][] = $project;
-        Cache::put('queue_projects', $queue_projects);
+        $queue[$activeRole->name][] = [
+            'id' => $project->id,
+            'external_id' => $project->external_id,
+        ];
 
-        if (empty($queue_projects['running'])) {
-            EsperaLiberacao::dispatch();
-        }
+        Cache::put('queue_projects', $queue);
+
+        EsperaLiberacao::dispatch();
 
         return response()->json([
             'message' => 'QObject enfileirado com sucesso',
