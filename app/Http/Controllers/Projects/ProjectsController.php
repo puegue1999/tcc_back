@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Projects;
 
 use App\Models\Project;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
 use App\Services\ProjectService;
 use Illuminate\Support\Facades\Cache;
@@ -33,13 +34,9 @@ class ProjectsController extends Controller
         $user = auth('api')->user();
         $user->projects()->attach($project->id);
 
-        $queue_projects = Cache::get('queue_projects', [
-            'admin' => [],
-            'professor' => [],
-            'aluno' => [],
-            'running' => []
-        ]);
-        $queue_projects['aluno'][] = $project;
+        $activeRole = $user->activeRole();
+
+        $queue_projects[$activeRole->name][] = $project;
         Cache::put('queue_projects', $queue_projects);
 
         if (empty($queue_projects['running'])) {
@@ -48,9 +45,44 @@ class ProjectsController extends Controller
 
         return response()->json([
             'message' => 'QObject enfileirado com sucesso',
-            'id' => $project->external_id,
-            'fila' => $queue_projects
+            'id' => $project->external_id
         ], 200);
+    }
+
+    /**
+     * Show the form for list all resources.
+     */
+    public function listAllProjectByUser()
+    {
+        $user = auth('api')->user();
+        $pageProject = $user->projects()
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+
+        return response()->json([
+            'data' => $pageProject->items(),
+            'meta' => [
+                'current_page' => $pageProject->currentPage(),
+                'last_page' => $pageProject->lastPage(),
+                'per_page' => $pageProject->perPage(),
+            ]
+        ], 200);
+    }
+
+    /**
+     * Show the form for list all resources.
+     */
+    public function getProject(Request $request)
+    {
+        $payload = $request->json()->all();
+        $projectService = new ProjectService();
+        $project = new Project();
+        $project = $projectService->getProject($payload['externalId']);
+
+        return response()->json(
+            $project,
+            200
+        );
     }
 
     public function runQuantumCircuit(Request $request)

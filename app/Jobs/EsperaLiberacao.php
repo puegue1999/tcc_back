@@ -33,31 +33,31 @@ class EsperaLiberacao implements ShouldQueue
 
             try {
                 $fila = Cache::get('queue_projects', [
-                    'admin' => [],
-                    'professor' => [],
-                    'aluno' => [],
+                    'Administrador' => [],
+                    'Professor' => [],
+                    'Aluno' => [],
                     'running' => []
                 ]);
 
                 $item = null;
                 $source = null;
 
-                if (!empty($fila['admin'])) {
-                    $item = array_shift($fila['admin']);
-                    $source = 'admin';
-                } elseif (!empty($fila['professor'])) {
-                    $item = array_shift($fila['professor']);
-                    $source = 'professor';
-                } elseif (!empty($fila['aluno'])) {
-                    $item = array_shift($fila['aluno']);
-                    $source = 'aluno';
+                if (!empty($fila['Administrador'])) {
+                    $item = array_shift($fila['Administrador']);
+                    $source = 'Administrador';
+                } elseif (!empty($fila['Professor'])) {
+                    $item = array_shift($fila['Professor']);
+                    $source = 'Professor';
+                } elseif (!empty($fila['Aluno'])) {
+                    $item = array_shift($fila['Aluno']);
+                    $source = 'Aluno';
                 }
 
                 if ($item === null) { // nada pra processar
                     // reindex e salva (opcional)
-                    $fila['admin'] = array_values($fila['admin']);
-                    $fila['professor'] = array_values($fila['professor']);
-                    $fila['aluno'] = array_values($fila['aluno']);
+                    $fila['Administrador'] = array_values($fila['Administrador']);
+                    $fila['Professor'] = array_values($fila['Professor']);
+                    $fila['Aluno'] = array_values($fila['Aluno']);
                     $fila['running'] = array_values($fila['running']);
                     Cache::put('queue_projects', $fila);
 
@@ -67,9 +67,9 @@ class EsperaLiberacao implements ShouldQueue
 
                 // move item para running e salva (a operação é atômica enquanto temos o lock)
                 $fila['running'][] = $item;
-                $fila['admin'] = array_values($fila['admin']);
-                $fila['professor'] = array_values($fila['professor']);
-                $fila['aluno'] = array_values($fila['aluno']);
+                $fila['Administrador'] = array_values($fila['Administrador']);
+                $fila['Professor'] = array_values($fila['Professor']);
+                $fila['Aluno'] = array_values($fila['Aluno']);
                 $fila['running'] = array_values($fila['running']);
                 Cache::put('queue_projects', $fila);
 
@@ -96,9 +96,9 @@ class EsperaLiberacao implements ShouldQueue
             if ($lock->get()) {
                 try {
                     $fila = Cache::get('queue_projects', [
-                        'admin' => [],
-                        'professor' => [],
-                        'aluno' => [],
+                        'Administrador' => [],
+                        'Professor' => [],
+                        'Aluno' => [],
                         'running' => []
                     ]);
 
@@ -111,9 +111,9 @@ class EsperaLiberacao implements ShouldQueue
                     }
 
                     $fila['running'] = array_values($fila['running']);
-                    $fila['admin'] = array_values($fila['admin']);
-                    $fila['professor'] = array_values($fila['professor']);
-                    $fila['aluno'] = array_values($fila['aluno']);
+                    $fila['Administrador'] = array_values($fila['Administrador']);
+                    $fila['Professor'] = array_values($fila['Professor']);
+                    $fila['Aluno'] = array_values($fila['Aluno']);
 
                     Cache::put('queue_projects', $fila);
 
@@ -147,17 +147,19 @@ class EsperaLiberacao implements ShouldQueue
         $process->setWorkingDirectory(dirname($script));
         $process->run();
 
-        if (!$process->isSuccessful()) {
-            Log::error('[EsperaLiberacao] Process error: ' . $process->getErrorOutput());
-        } else {
-            Log::info('[EsperaLiberacao] Process output: ' . $process->getOutput());
-        }
-
         $projectService = new ProjectService();
         $projModel = $projectService->getProject($project->external_id);
-        if ($projModel) {
+
+        if (!$process->isSuccessful() && $projModel) {
+            Log::error('[EsperaLiberacao] Process error: ' . $process->getErrorOutput());
+            $projModel->status = 'ERROR';
+            $projModel->qobject_result = $process->getErrorOutput();
+        } else if ($projModel) {
+            Log::info('[EsperaLiberacao] Process output: ' . $process->getOutput());
             $projModel->status = 'FINISHED';
-            $projModel->save();
+            $projModel->qobject_result = $process->getOutput();
         }
+
+        $projModel->save();
     }
 }

@@ -12,6 +12,7 @@ class Project extends Model
     protected $fillable = [
         'external_id',
         'qobject',
+        'qobject_result',
         'status'
     ];
 

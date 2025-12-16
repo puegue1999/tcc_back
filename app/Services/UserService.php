@@ -29,9 +29,4 @@ class UserService
     {
         return preg_replace('/[^a-zA-Z0-9]/', '', $external_id);
     }
-
-    public function getUserByKeys($request)
-    {
-        return User::where('email', $request['email'])->where('password', $request['password'])->first();
-    }
 }

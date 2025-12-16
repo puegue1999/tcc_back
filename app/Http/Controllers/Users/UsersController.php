@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Users;
 
 use App\Models\Users;
+use App\Models\Role;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Services\UserService;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Illuminate\Support\Facades\Auth;
 
 class UsersController extends Controller
 {
@@ -30,14 +32,26 @@ class UsersController extends Controller
         $user->terms_agreement_date = null;
 
         $user->save();
+
+        $role = Role::where('name', 'Aluno')->first();
+
+        $user->roles()->attach($role->id);
     }
 
     public function login(UserLoginRequest $request)
     {
-        $data = $request->all();
-        $userService = new UserService();
-        $user = new User();
-        $user = $userService->getUserByKeys($data);
+        $credentials = [
+            'email' => strtolower($request->email),
+            'password' => $request->password,
+        ];
+
+        if (!Auth::attempt($credentials)) {
+            return response()->json([
+                'message' => 'Credenciais inválidas'
+            ], 401);
+        }
+
+        $user = Auth::user();
         $token = $this->generateJwtToken($user);
         return response()->json(['token' => $token], 200);
     }
@@ -51,9 +65,9 @@ class UsersController extends Controller
     public static function generateJwtToken($user = null)
     {
         $payload = [
-            'name'               => $user->name,
-            'email'              => $user->email,
-            'external_id'        => $user->external_id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'external_id' => $user->external_id,
         ];
 
         return JWTAuth::claims($payload)->fromUser($user);

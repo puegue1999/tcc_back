@@ -46,6 +46,8 @@ Route::middleware(
         'prefix' => 'project',
     ], function ($router) {
         Route::post('create', '\App\Http\Controllers\Projects\ProjectsController@create');
+        Route::get('list', '\App\Http\Controllers\Projects\ProjectsController@listAllProjectByUser');
+        Route::get('getProject', '\App\Http\Controllers\Projects\ProjectsController@getProject');
         Route::get('teste', '\App\Http\Controllers\Projects\ProjectsController@runQuantumCircuit');
     });
 });

@@ -80,8 +80,22 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class, 'enrollments_user_role_relateds')
+            ->withTimestamps();
+    }
+
     public function projects()
     {
-        return $this->belongsToMany(Project::class, 'enrollments_user_project_relateds');
+        return $this->belongsToMany(Project::class, 'enrollments_user_project_relateds')
+            ->withTimestamps();
     }
+    public function activeRole()
+    {
+        return $this->roles()
+            ->wherePivot('active', true)
+            ->first();
+    }
+
 }

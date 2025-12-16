@@ -14,7 +14,8 @@ return new class extends Migration {
             $table->id();
             $table->string('external_id')->unique()->nullable();
             $table->json('qobject')->nullable();
-            $table->enum('status', ['QUEUE', 'FINISHED']);
+            $table->json('qobject_result')->nullable();
+            $table->enum('status', ['QUEUE', 'FINISHED', 'ERROR']);
             $table->timestamps();
         });
     }
