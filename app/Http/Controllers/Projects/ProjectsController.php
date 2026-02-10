@@ -36,6 +36,14 @@ class ProjectsController extends Controller
 
         $activeRole = $user->activeRole();
 
+        $queue = Cache::get('queue_projects', [
+            'Administrador' => [],
+            'Professor' => [],
+            'Aluno' => [],
+            'Usuário' => [],
+            'running' => []
+        ]);
+
         $queue[$activeRole->name][] = [
             'id' => $project->id,
             'external_id' => $project->external_id,
@@ -59,7 +67,7 @@ class ProjectsController extends Controller
         $user = auth('api')->user();
         $pageProject = $user->projects()
             ->orderBy('created_at', 'desc')
-            ->paginate(10);
+            ->paginate(6);
 
         return response()->json([
             'data' => $pageProject->items(),
@@ -74,16 +82,28 @@ class ProjectsController extends Controller
     /**
      * Show the form for list all resources.
      */
-    public function getProject(Request $request)
+    public function getProject(Project $project)
+    {
+        $projectService = new ProjectService();
+        $time = $projectService->getTime($project->external_id);
+        return response()->json([
+            'projeto' => $project,
+            'tempo' => $time
+        ], 200);
+    }
+
+    public function updateProject(Project $project, Request $request)
     {
         $payload = $request->json()->all();
         $projectService = new ProjectService();
-        $project = new Project();
-        $project = $projectService->getProject($payload['externalId']);
+        $projectService->saveOutput($project->external_id, $payload);
+        $project->save();
 
         return response()->json(
-            $project,
-            200
+            [
+                'message' => 'QObject salvo com sucesso',
+                'id' => $project->external_id
+            ]
         );
     }
 

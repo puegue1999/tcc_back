@@ -57,9 +57,9 @@ RUN apt-get update && apt-get upgrade -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN python3 -m venv $VIRTUAL_ENV \
-    && pip install --upgrade pip setuptools wheel \
-    && pip install qiskit qiskit-aer
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
+    && /opt/venv/bin/pip install qiskit qiskit-aer psycopg2-binary requests
 
 RUN setcap "cap_net_bind_service=+ep" /usr/bin/php8.2
 

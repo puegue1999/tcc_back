@@ -25,13 +25,14 @@ RUN set -eux; \
     python3 \
     python3-venv \
     python3-dev \
+    python3-pip \
     libonig-dev; \
     rm -rf /var/lib/apt/lists/*
 
 # Criar venv e instalar qiskit dentro dele
-RUN python3 -m venv $VIRTUAL_ENV \
-    && pip install --upgrade pip setuptools wheel \
-    && pip install qiskit qiskit-aer
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
+    && /opt/venv/bin/pip install qiskit qiskit-aer psycopg2-binary requests
 
 RUN set -eux; \
     docker-php-ext-install pdo_mysql sockets;

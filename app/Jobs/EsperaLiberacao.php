@@ -73,20 +73,15 @@ class EsperaLiberacao implements ShouldQueue
              * Processamento fora do lock
              */
             try {
+
                 Project::where('external_id', $item['external_id'])
                     ->update(['status' => 'QUEUE']);
 
                 $this->runQuantumCircuit($item);
 
-                Project::where('external_id', $item['external_id'])
-                    ->update(['status' => 'FINISHED']);
-
                 Log::info("[EsperaLiberacao] processamento finalizado: {$item['external_id']}");
 
             } catch (\Throwable $e) {
-
-                Project::where('external_id', $item['external_id'])
-                    ->update(['status' => 'ERROR']);
 
                 Log::error(
                     "[EsperaLiberacao] erro ao processar {$item['external_id']}: {$e->getMessage()}"
@@ -118,8 +113,6 @@ class EsperaLiberacao implements ShouldQueue
                     }
                 }
             }
-
-            sleep(1);
         }
     }
 
@@ -140,7 +133,7 @@ class EsperaLiberacao implements ShouldQueue
         return null;
     }
 
-    public function runQuantumCircuit($project)
+    public function runQuantumCircuit($project): void
     {
         $python = '/opt/venv/bin/python';
         $script = base_path('app/Http/Controllers/Projects/runner.py');
@@ -148,21 +141,36 @@ class EsperaLiberacao implements ShouldQueue
         $projectService = new ProjectService();
         $request = $projectService->getProject($project['external_id']);
 
-        $process = new Process([$python, $script], dirname($script));
-        $process->setInput($request->qobject);
-        $process->setWorkingDirectory(dirname($script));
+        $tmpFile = sys_get_temp_dir()
+            . '/qobject_' . $project['external_id'] . '.json';
+
+        file_put_contents($tmpFile, $request->qobject);
+
+        $python = '/opt/venv/bin/python';
+        $script = base_path('app/Http/Controllers/Projects/runner.py');
+
+        $process = new Process([
+            $python,
+            $script,
+            $tmpFile,
+            $request->external_id
+        ]);
+
+        $process->setTimeout(3600000);
         $process->run();
 
-        if (!$process->isSuccessful() && $request) {
-            Log::error('[EsperaLiberacao] Process error: ' . $process->getErrorOutput());
+
+        if (!$process->isSuccessful()) {
+            Log::error('[EsperaLiberacao] Process failed: ' . $process->getErrorOutput());
             $request->status = 'ERROR';
-            $request->qobject_result = $process->getErrorOutput();
-        } else if ($request) {
-            Log::info('[EsperaLiberacao] Process output: ' . $process->getOutput());
+        } else {
             $request->status = 'FINISHED';
-            $request->qobject_result = $process->getOutput();
         }
 
         $request->save();
+
+        @unlink($tmpFile);
     }
+
+
 }

@@ -29,4 +29,16 @@ class ProjectService
     {
         return Project::where('external_id', $request)->first();
     }
+
+    public function getTime($request)
+    {
+        return Project::where('external_id', $request)
+            ->selectRaw('TIMEDIFF(updated_at, created_at) as tempo_total')
+            ->first();
+    }
+
+    public function saveOutput($externalId, $result)
+    {
+        return Project::where('external_id', $externalId)->update(['qobject_result' => $result]);
+    }
 }
