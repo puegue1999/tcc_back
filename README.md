@@ -1,4 +1,4 @@
-# 🧩 Plataforma TCC — Ambiente Docker
+# 🧩 Backend TCC — Ambiente Docker
 
 Este projeto utiliza **Laravel**, **Nginx**, **PHP-FPM**, **MariaDB**, **Redis**, **Supervisor** e **phpMyAdmin**, totalmente configurados via **Docker Compose**.
 
